@@ -46,6 +46,20 @@ run_timed() {
   )
 }
 
+# bash_without_basphpid prints a bash on this host that has no BASHPID, which is
+# every bash before 4, and fails when the host has none.
+bash_without_basphpid() {
+  local candidate probe
+  for candidate in /bin/bash /usr/bin/bash; do
+    [ -x "$candidate" ] || continue
+    probe=$("$candidate" -c 'printf "%s" "${BASHPID:-}"' 2>/dev/null) || continue
+    [ -n "$probe" ] && continue
+    printf '%s' "$candidate"
+    return 0
+  done
+  return 1
+}
+
 wait_for_file() {  # <path>
   local i=0
   while [ ! -s "$1" ]; do
@@ -327,6 +341,30 @@ test_run_timed_passes_a_natural_exit_through_a_fired_bound() {
   pass 'fm_run_timed passes a natural exit through when the bound fired after completion'
 }
 
+# The owner capture reads BASHPID to tell the calling script from the subshell
+# it may be running in, and macOS ships bash 3.2 as /bin/bash, where BASHPID
+# does not exist at all. Under set -u an unguarded expansion there aborts every
+# bounded call on such a host before the command starts, so run the whole
+# function under that bash and require the command's own status and stdout
+# through, not merely that the call did not crash.
+test_bounds_a_command_under_a_bash_without_basphpid() {
+  local legacy rc=0 out
+  legacy=$(bash_without_basphpid) || {
+    pass "fm_exec_timed under a bash without BASHPID (skipped: no such bash on this host)"
+    return 0
+  }
+  # The positional parameters belong to the bash under test.
+  out=$("$legacy" -c '
+    set -u
+    . "$1"
+    PATH="$2" fm_exec_timed 5 1 bash -c "echo bounded-under-legacy-bash; exit 7"
+  ' _ "$ROOT/bin/fm-timeout-lib.sh" "$PERL_ONLY" 2>&1) || rc=$?
+  [ "$rc" -eq 7 ] \
+    || fail "fm_exec_timed under $legacy lost the command's own status (rc=$rc): $out"
+  assert_contains "$out" bounded-under-legacy-bash "fm_exec_timed under $legacy lost the command's stdout"
+  pass "fm_exec_timed bounds a command under $legacy, where BASHPID does not exist"
+}
+
 test_passes_the_command_status_and_output_through
 test_run_timed_reports_the_bound_when_the_wrapper_records_a_signal_death
 test_run_timed_passes_a_natural_exit_through_a_fired_bound
@@ -342,3 +380,4 @@ test_refuses_rather_than_running_unbounded
 test_rejects_malformed_bounds_before_running_anything
 test_gnu_timeout_kills_a_term_ignoring_command_after_the_grace
 test_timed_out_names_exactly_the_bound_statuses
+test_bounds_a_command_under_a_bash_without_basphpid
