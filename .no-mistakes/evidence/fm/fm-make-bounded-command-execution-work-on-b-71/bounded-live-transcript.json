@@ -1,0 +1,102 @@
+[
+  {
+    "scenario": "Host Bash has no BASHPID",
+    "command": [
+      "/bin/bash",
+      "-uc",
+      "printf \"Bash=%s BASHPID=%s\\n\" \"$BASH_VERSION\" \"${BASHPID-unavailable}\""
+    ],
+    "exit_status": 0,
+    "elapsed_seconds": 0.002,
+    "output": "Bash=3.2.57(1)-release BASHPID=unavailable\n"
+  },
+  {
+    "scenario": "Before fix: bounded command aborts before launch",
+    "command": [
+      "/bin/bash",
+      "-c",
+      "set -u; . \"$1\"; fm_exec_timed 5 1 /bin/bash -c \"echo bounded-under-legacy-bash; exit 7\"",
+      "_",
+      "/Users/longnguyen/.no-mistakes/worktrees/26596dffc7fc/01M3ZN0S1Q3YZYV0921FM7STQB/.test-bounded-live/base-timeout.sh"
+    ],
+    "exit_status": 127,
+    "elapsed_seconds": 0.002,
+    "output": "/Users/longnguyen/.no-mistakes/worktrees/26596dffc7fc/01M3ZN0S1Q3YZYV0921FM7STQB/.test-bounded-live/base-timeout.sh: line 224: BASHPID: unbound variable\n"
+  },
+  {
+    "scenario": "After fix: stdout and status pass through",
+    "command": [
+      "/bin/bash",
+      "-c",
+      "set -u; . \"$1\"; fm_exec_timed 5 1 /bin/bash -c \"echo bounded-under-legacy-bash; exit 7\"",
+      "_",
+      "/Users/longnguyen/.no-mistakes/worktrees/26596dffc7fc/01M3ZN0S1Q3YZYV0921FM7STQB/bin/fm-timeout-lib.sh"
+    ],
+    "exit_status": 7,
+    "elapsed_seconds": 0.077,
+    "output": "bounded-under-legacy-bash\n"
+  },
+  {
+    "scenario": "Existing regression and targeted bounds behavior",
+    "command": [
+      "/bin/bash",
+      "/Users/longnguyen/.no-mistakes/worktrees/26596dffc7fc/01M3ZN0S1Q3YZYV0921FM7STQB/.test-bounded-live/selected-tests.sh"
+    ],
+    "exit_status": 0,
+    "elapsed_seconds": 6.009,
+    "output": "ok - fm_exec_timed bounds a command under /bin/bash, where BASHPID does not exist\nok - fm_exec_timed passes a command's status and output through unchanged\nok - fm_exec_timed sends TERM at the bound and a cooperative command ends there\nok - fm_exec_timed kills a TERM-ignoring command once the grace has passed\nok - fm_exec_timed reaps a descendant that would otherwise hold the output past the bound\nok - fm_exec_timed rejects a zero, padded, non-numeric, or missing bound and a missing command\nok - fm_exec_timed refuses instead of running unbounded when no mechanism exists\n"
+  },
+  {
+    "scenario": "Create isolated queued backlog item",
+    "command": [
+      "/bin/bash",
+      "bin/fm-tasks-axi.sh",
+      "add",
+      "legacy-live",
+      "Legacy bash bounded dispatch",
+      "--kind",
+      "ship"
+    ],
+    "exit_status": 0,
+    "elapsed_seconds": 0.083,
+    "output": "ok: added legacy-live (ship) -> Queued\ntask:\n  id: legacy-live\n  title: Legacy bash bounded dispatch\n  state: queued\n  blocked: no\n  blocked_by: none\n  held: no\n  hold_reason: \"-\"\n  hold_kind: \"-\"\n  hold_until: \"-\"\n  kind: ship\n  repo: \"-\"\n  priority: \"-\"\n  created: 2026-10-03\n  closed: \"-\"\n  deps: none\n  links: none\n  body: \"\"\nhelp[2]:\n  - Run `tasks-axi start legacy-live` to move it to in flight\n  - Run `tasks-axi block legacy-live --by <other>` to record a dependency\n"
+  },
+  {
+    "scenario": "Show queued item",
+    "command": [
+      "/bin/bash",
+      "bin/fm-tasks-axi.sh",
+      "show",
+      "legacy-live"
+    ],
+    "exit_status": 0,
+    "elapsed_seconds": 0.07,
+    "output": "task:\n  id: legacy-live\n  title: Legacy bash bounded dispatch\n  state: queued\n  blocked: no\n  blocked_by: none\n  held: no\n  hold_reason: \"-\"\n  hold_kind: \"-\"\n  hold_until: \"-\"\n  kind: ship\n  repo: \"-\"\n  priority: \"-\"\n  created: 2026-10-03\n  closed: \"-\"\n  deps: none\n  links: none\n  body: \"\"\n"
+  },
+  {
+    "scenario": "Real bounded dispatch transaction on Bash 3.2",
+    "command": [
+      "/bin/bash",
+      "-c",
+      "set -u\n. \"$1/bin/fm-tasks-axi-lib.sh\"\n. \"$1/bin/fm-backlog-transition-lib.sh\"\nFM_TASKS_AXI_TIMEOUT=5\nfm_backlog_atomic_transition dispatch \"$2/state/legacy-live.meta\" \"$2/data\" legacy-live \"$2/state\" || { printf 'transition error: %s\\n' \"$FM_BACKLOG_TRANSITION_ERROR\"; exit 1; }\nfm_backlog_row_probe \"$2/data\" legacy-live || exit 2\nprintf 'row after bounded dispatch: %s\\n' \"$FM_BACKLOG_ROW_STATE\"\n[ \"$FM_BACKLOG_ROW_STATE\" = 'in_flight no no' ]\n",
+      "_",
+      "/Users/longnguyen/.no-mistakes/worktrees/26596dffc7fc/01M3ZN0S1Q3YZYV0921FM7STQB",
+      "/Users/longnguyen/.no-mistakes/worktrees/26596dffc7fc/01M3ZN0S1Q3YZYV0921FM7STQB/.test-bounded-live/home"
+    ],
+    "exit_status": 0,
+    "elapsed_seconds": 0.501,
+    "output": "row after bounded dispatch: in_flight no no\n"
+  },
+  {
+    "scenario": "Persisted item now In flight",
+    "command": [
+      "/bin/bash",
+      "bin/fm-tasks-axi.sh",
+      "show",
+      "legacy-live"
+    ],
+    "exit_status": 0,
+    "elapsed_seconds": 0.068,
+    "output": "task:\n  id: legacy-live\n  title: Legacy bash bounded dispatch\n  state: in_flight\n  blocked: no\n  blocked_by: none\n  held: no\n  hold_reason: \"-\"\n  hold_kind: \"-\"\n  hold_until: \"-\"\n  kind: ship\n  repo: \"-\"\n  priority: \"-\"\n  created: 2026-10-03\n  closed: \"-\"\n  deps: none\n  links: none\n  body: \"\"\n"
+  }
+]
