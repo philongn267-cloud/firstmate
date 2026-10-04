@@ -35,8 +35,12 @@
 #       be signalled (an owner torn down by an outer group-kill cannot leave
 #       the bounded subtree orphaned behind it). The owner is captured before
 #       the watchdog starts: FM_EXEC_TIMED_OWNER_PID when the caller names it,
-#       else the calling script ($$) when fm_exec_timed runs in a subshell,
-#       else the shell's parent. The escalation starts once that owner is gone
+#       else the calling script ($$) when BASHPID distinguishes a subshell,
+#       else the shell's parent. When BASHPID is unavailable (Bash 3.2), the
+#       comparison uses $$ so bounded calls work under set -u, but the default
+#       owner is the shell's parent even in a subshell. An explicitly named
+#       owner equal to that comparison PID also selects the shell's parent.
+#       The escalation starts once the selected owner is gone
 #       or the watchdog's parent changes, so an owner that dies while the
 #       watchdog is still starting is detected too. The timeout/gtimeout
 #       fallback does not track the owner: it bounds the command only by its
@@ -221,7 +225,7 @@ fm_exec_timed() {  # <seconds> <grace-seconds> <command...>
     exit 125
   fi
   owner=${FM_EXEC_TIMED_OWNER_PID:-$$}
-  [ "$owner" != "$BASHPID" ] || owner=$PPID
+  [ "$owner" != "${BASHPID:-$$}" ] || owner=$PPID
   unset FM_EXEC_TIMED_OWNER_PID
   if command -v perl >/dev/null 2>&1; then
     exec perl -MPOSIX=WNOHANG,setpgid -MTime::HiRes=time -e '
